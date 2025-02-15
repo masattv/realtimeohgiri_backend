@@ -1,0 +1,4 @@
+venv/
+*.pyc  # Python のコンパイル済みファイル
+__pycache__/
+.DS_Store  # macOS の隠しファイル
