@@ -1,4 +1,5 @@
 # app.py
+import os
 import datetime
 import threading
 import torch
@@ -268,6 +269,8 @@ def add_topic():
         return jsonify({'error': 'Failed to add topic'}), 500
 
 if __name__ == '__main__':
+    # Render では環境変数 PORT が設定されるので、それを使う
+    port = int(os.environ.get("PORT", 5000))
     load_model()  # アプリケーション起動時にモデルをロード
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, port=port)
 
