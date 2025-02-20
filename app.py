@@ -2,19 +2,44 @@
 import os
 import datetime
 import threading
-import torch
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_socketio import SocketIO
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, pipeline, GenerationConfig
-
-
+from model_handler import ModelHandler
 
 # Flaskアプリの初期化
 app = Flask(__name__)
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# CORS設定
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:3000",     # ローカル開発用
+            "http://localhost:5173",     # Vite開発サーバー用
+            "https://your-production-domain.com",  # 本番環境用（必要に応じて変更）
+        ],
+        "methods": [
+            "GET", 
+            "POST", 
+            "PUT", 
+            "DELETE", 
+            "OPTIONS"
+        ],
+        "allow_headers": [
+            "Content-Type",
+            "Authorization",
+            "Access-Control-Allow-Credentials"
+        ],
+        "supports_credentials": True  # Cookieを使用する場合は True
+    }
+})
+
+socketio = SocketIO(app, cors_allowed_origins=[
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://your-production-domain.com"
+])
 
 # SQLiteを利用したDB設定
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///realtimeohgiri.db'
@@ -39,96 +64,43 @@ class Answer(db.Model):
 with app.app_context():
     db.create_all()
 
-# モデルのグローバル変数
-tokenizer = None
-model = None
-generation_pipeline = None
+# モデルハンドラーのインスタンス化
+model_handler = ModelHandler()
 
-def load_model():
-    global tokenizer, model, generation_pipeline
+# generate_commentary関数を削除し、model_handlerを使用するように変更
+def process_commentary(answer_id, text, topic_prompt):
+    max_retries = 3
+    retry_count = 0
     
-    print("モデルのロード中...")
-    try:
-        model_name = "elyza/Llama-3-ELYZA-JP-8B"
-        
-        # モデルの設定をロード
-        config = AutoConfig.from_pretrained(
-            model_name,
-            trust_remote_code=True
-        )
-        config.rotary_dim = 32
-        config.tie_word_embeddings = True  # 重みを共有するように設定
-
-        # トークナイザーのロード
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            use_fast=False
-        )
-
-        # モデルのロード
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            config=config,
-            trust_remote_code=True,
-            torch_dtype=torch.float32,
-            low_cpu_mem_usage=True,
-            device_map="auto",
-            offload_folder="offload"  # オフロードフォルダを指定
-        )
-
-        model = model.float()
-
-
-        # パイプラインの設定
-        generation_pipeline = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            device_map="auto"
-        )
-
-        print("モデルロード完了")
-    except Exception as e:
-        print(f"モデルロードエラー: {e}")
-        raise
-
-
-
-def generate_commentary(answer_text, topic_prompt):
-    try:
-        prompt_text = f"""以下の大喜利のお題と回答に対して、75文字以内で簡潔でユーモアのある総評をしてください。
-お題: {topic_prompt}
-回答: {answer_text}
-総評:"""
-        
-        print(f"Input prompt_text to pipeline: {prompt_text}")
-        with torch.no_grad():
-            result = generation_pipeline(
-                prompt_text,
-                max_new_tokens=75,  # max_lengthの代わりにmax_new_tokensを使用
-                num_return_sequences=1,
-                temperature=0.3,
-                top_p=0.3,
-                pad_token_id=tokenizer.eos_token_id,
-                do_sample=True,
-                return_full_text=False  # 入力プロンプトを含まない
-            )
-            print(f"Pipeline result: {result}")
-            # 生成されたテキストから直接総評を取得
-            commentary = result[0]['generated_text'].strip()
-        if len(commentary) > 75:
-            commentary = commentary[:72] + "..."
-            
-        print(f"Generated commentary: {commentary}")  # デバッグ用
-        
-        if not commentary or commentary.isspace():
-            return "申し訳ありません。もう一度総評を生成してください。"
-            
-        return commentary
-    except Exception as e:
-        print(f"Error in generate_commentary: {e}")  # デバッグ用
-        return "申し訳ありません。総評の生成中にエラーが発生しました。"
+    while retry_count < max_retries:
+        try:
+            with app.app_context():
+                commentary = model_handler.generate_commentary(text, topic_prompt)
+                answer = db.session.get(Answer, answer_id)
+                if answer:
+                    if commentary != "申し訳ありません。もう一度総評を生成してください。":
+                        answer.commentary = commentary
+                        db.session.commit()
+                        print(f"Commentary saved for answer {answer_id}: {commentary}")
+                        socketio.emit('commentary_updated', {
+                            'answer_id': answer_id,
+                            'commentary': commentary
+                        })
+                        break
+                    else:
+                        retry_count += 1
+                        if retry_count == max_retries:
+                            answer.commentary = "申し訳ありません。総評の生成に失敗しました。"
+                            db.session.commit()
+        except Exception as e:
+            print(f"Error in process_commentary (attempt {retry_count + 1}): {e}")
+            retry_count += 1
+            if retry_count == max_retries:
+                with app.app_context():
+                    answer = db.session.get(Answer, answer_id)
+                    if answer:
+                        answer.commentary = "申し訳ありません。総評の生成に失敗しました。"
+                        db.session.commit()
 
 # APIエンドポイント
 
@@ -185,41 +157,6 @@ def post_answer(topic_id):
     db.session.add(new_answer)
     db.session.commit()
 
-    def process_commentary(answer_id, text, topic_prompt):
-        max_retries = 3
-        retry_count = 0
-        
-        while retry_count < max_retries:
-            try:
-                with app.app_context():
-                    commentary = generate_commentary(text, topic_prompt)
-                    answer = db.session.get(Answer, answer_id)
-                    if answer:
-                        if commentary != "申し訳ありません。もう一度総評を生成してください。":
-                            answer.commentary = commentary
-                            db.session.commit()
-                            print(f"Commentary saved for answer {answer_id}: {commentary}")
-                            # WebSocketを通じて更新を通知
-                            socketio.emit('commentary_updated', {
-                                'answer_id': answer_id,
-                                'commentary': commentary
-                            })
-                            break
-                        else:
-                            retry_count += 1
-                            if retry_count == max_retries:
-                                answer.commentary = "申し訳ありません。総評の生成に失敗しました。"
-                                db.session.commit()
-            except Exception as e:
-                print(f"Error in process_commentary (attempt {retry_count + 1}): {e}")
-                retry_count += 1
-                if retry_count == max_retries:
-                    with app.app_context():
-                        answer = db.session.get(Answer, answer_id)
-                        if answer:
-                            answer.commentary = "申し訳ありません。総評の生成に失敗しました。"
-                            db.session.commit()
-
     thread = threading.Thread(
         target=process_commentary,
         args=(new_answer.id, answer_text, topic.prompt)
@@ -269,8 +206,6 @@ def add_topic():
         return jsonify({'error': 'Failed to add topic'}), 500
 
 if __name__ == '__main__':
-    # Render では環境変数 PORT が設定されるので、それを使う
     port = int(os.environ.get("PORT", 5000))
-    load_model()  # アプリケーション起動時にモデルをロード
     socketio.run(app, debug=True, port=port)
 
