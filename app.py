@@ -207,5 +207,11 @@ def add_topic():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, debug=True, port=port)
+    debug_mode = os.environ.get("FLASK_ENV") == "development"
+    socketio.run(
+        app, 
+        debug=debug_mode,  # 本番環境ではFalse
+        port=port,
+        allow_unsafe_werkzeug=True
+    )
 
