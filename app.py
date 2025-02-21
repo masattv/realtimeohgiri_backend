@@ -212,6 +212,7 @@ if __name__ == '__main__':
         app, 
         debug=debug_mode,  # 本番環境ではFalse
         port=port,
+        host='0.0.0.0',  # すべてのインターフェースにバインド
         allow_unsafe_werkzeug=True
     )
 
