@@ -208,11 +208,19 @@ def add_topic():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     debug_mode = os.environ.get("FLASK_ENV") == "development"
-    socketio.run(
-        app, 
-        debug=debug_mode,  # 本番環境ではFalse
-        port=port,
-        host='0.0.0.0',  # すべてのインターフェースにバインド
-        allow_unsafe_werkzeug=True
-    )
+    
+    # Render環境かどうかを確認
+    is_render = os.environ.get("RENDER") == "true"
+    
+    if is_render:
+        # Renderではgunicornが使用されるため、このブロックは実行されない
+        pass
+    else:
+        # ローカル開発環境での実行
+        socketio.run(
+            app, 
+            debug=debug_mode,
+            port=port,
+            host='0.0.0.0'
+        )
 
