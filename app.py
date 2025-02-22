@@ -206,7 +206,7 @@ def add_topic():
         return jsonify({'error': 'Failed to add topic'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))  # ポート番号を5000に変更
     debug_mode = os.environ.get("FLASK_ENV") == "development"
     
     # Render環境かどうかを確認
