@@ -17,7 +17,7 @@ CORS(app, resources={
         "origins": [
             "http://localhost:3000",     # ローカル開発用
             "http://localhost:5173",     # Vite開発サーバー用
-            "https://your-production-domain.com",  # 本番環境用（必要に応じて変更）
+            "https://realtimeohgiri-backend.onrender.com",  # 本番環境用（必要に応じて変更）
         ],
         "methods": [
             "GET", 
@@ -38,7 +38,7 @@ CORS(app, resources={
 socketio = SocketIO(app, cors_allowed_origins=[
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://your-production-domain.com"
+    "https://realtimeohgiri-backend.onrender.com"
 ])
 
 # SQLiteを利用したDB設定
