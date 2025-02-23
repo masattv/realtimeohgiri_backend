@@ -17,7 +17,7 @@ CORS(app, resources={
         "origins": [
             "http://localhost:3000",     # ローカル開発用
             "http://localhost:5173",     # Vite開発サーバー用
-            "https://realtimeohgiri.netlify.app/",  # 本番環境用（必要に応じて変更）
+            "https://realtimeohgiri.netlify.app",  # 本番環境用（スラッシュを削除）
         ],
         "methods": [
             "GET", 
@@ -29,17 +29,20 @@ CORS(app, resources={
         "allow_headers": [
             "Content-Type",
             "Authorization",
-            "Access-Control-Allow-Credentials"
+            "Access-Control-Allow-Credentials",
+            "X-Requested-With"  # 追加
         ],
-        "supports_credentials": True  # Cookieを使用する場合は True
+        "supports_credentials": True,
+        "expose_headers": ["Content-Type", "Authorization"],  # 追加
+        "max_age": 3600  # プリフライトリクエストのキャッシュ時間
     }
 })
 
 socketio = SocketIO(app, cors_allowed_origins=[
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://realtimeohgiri.netlify.app/"
-])
+    "https://realtimeohgiri.netlify.app"  # スラッシュを削除
+], cors_credentials=True)  # credentials サポートを追加
 
 # SQLiteを利用したDB設定
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///realtimeohgiri.db'
