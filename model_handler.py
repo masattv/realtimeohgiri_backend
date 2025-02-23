@@ -4,7 +4,8 @@ import json
 
 class ModelHandler:
     def __init__(self):
-        self.api_base_url = "https://45b2-2402-6b00-be46-7100-4c56-e1a4-311e-260a.ngrok-free.app"  # LM StudioのデフォルトURL
+        # LM StudioのデフォルトURL
+        self.api_base_url = "https://2389-2402-6b00-be46-7100-1581-7c9f-d16d-b48d.ngrok-free.app/v1"
         self.max_retries = 3
 
     def generate_commentary(self, answer_text: str, topic_prompt: str) -> str:
@@ -21,15 +22,24 @@ class ModelHandler:
                 "Content-Type": "application/json"
             }
             
+            # OpenAI APIフォーマットに合わせたリクエストデータ
             data = {
+                "model": "local-model",  # モデル名は任意
                 "messages": [
-                    {"role": "user", "content": prompt_text}
+                    {
+                        "role": "system",
+                        "content": "あなたは大喜利の回答に対して簡潔でユーモアのある総評を書く専門家です。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt_text
+                    }
                 ],
                 "temperature": 0.7,
-                "max_tokens": 100,
-                "stop": ["\n"],  # 改行で生成を停止
-                "stream": False
+                "max_tokens": 100
             }
+
+            print(f"Attempting to connect to LM Studio API at: {self.api_base_url}")
 
             # リトライロジック
             for attempt in range(self.max_retries):
@@ -40,6 +50,9 @@ class ModelHandler:
                         json=data,
                         timeout=30
                     )
+                    
+                    print(f"Response status code: {response.status_code}")
+                    print(f"Response content: {response.text}")
                     
                     if response.status_code == 200:
                         result = response.json()
@@ -53,15 +66,15 @@ class ModelHandler:
                         return commentary
                     
                 except requests.exceptions.RequestException as e:
+                    print(f"Connection error on attempt {attempt + 1}: {str(e)}")
                     if attempt == self.max_retries - 1:
-                        print(f"API request failed after {self.max_retries} attempts: {e}")
                         return "申し訳ありません。総評の生成中にエラーが発生しました。"
                     continue
 
             return "申し訳ありません。総評の生成中にエラーが発生しました。"
 
         except Exception as e:
-            print(f"Error in generate_commentary: {e}")
+            print(f"Error in generate_commentary: {str(e)}")
             return "申し訳ありません。総評の生成中にエラーが発生しました。"
 
 
