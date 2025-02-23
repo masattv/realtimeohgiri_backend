@@ -11,38 +11,62 @@ from model_handler import ModelHandler
 # Flaskアプリの初期化
 app = Flask(__name__)
 
-# CORS設定
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "http://localhost:3000",     # ローカル開発用
-            "http://localhost:5173",     # Vite開発サーバー用
-            "https://realtimeohgiri.netlify.app",  # 本番環境用（スラッシュを削除）
-        ],
-        "methods": [
-            "GET", 
-            "POST", 
-            "PUT", 
-            "DELETE", 
-            "OPTIONS"
-        ],
-        "allow_headers": [
-            "Content-Type",
-            "Authorization",
-            "Access-Control-Allow-Credentials",
-            "X-Requested-With"  # 追加
-        ],
-        "supports_credentials": True,
-        "expose_headers": ["Content-Type", "Authorization"],  # 追加
-        "max_age": 3600  # プリフライトリクエストのキャッシュ時間
-    }
-})
+# 環境に応じたCORS設定
+is_development = os.environ.get("FLASK_ENV") == "development"
 
-socketio = SocketIO(app, cors_allowed_origins=[
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://realtimeohgiri.netlify.app"  # スラッシュを削除
-], cors_credentials=True)  # credentials サポートを追加
+if is_development:
+    # 開発環境: すべてのオリジンを許可
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": "*",
+            "supports_credentials": True
+        }
+    })
+    
+    # Socket.IOの開発環境設定
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        cors_credentials=True
+    )
+else:
+    # 本番環境: 特定のオリジンのみ許可
+    CORS(app, resources={
+        r"/*": {
+            "origins": [
+                "https://realtimeohgiri.netlify.app"  # 本番フロントエンド
+            ],
+            "methods": [
+                "GET", 
+                "POST", 
+                "PUT", 
+                "DELETE", 
+                "OPTIONS"
+            ],
+            "allow_headers": [
+                "Content-Type",
+                "Authorization",
+                "Access-Control-Allow-Credentials",
+                "X-Requested-With"
+            ],
+            "supports_credentials": True,
+            "expose_headers": ["Content-Type", "Authorization"],
+            "max_age": 3600
+        }
+    })
+    
+    # Socket.IOの本番環境設定
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins=[
+            "https://realtimeohgiri.netlify.app"
+        ],
+        cors_credentials=True,
+        ping_timeout=60,
+        ping_interval=25
+    )
 
 # SQLiteを利用したDB設定
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///realtimeohgiri.db'

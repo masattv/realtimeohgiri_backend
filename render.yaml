@@ -16,4 +16,6 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: RENDER
-        value: "true" 
+        value: "true"
+      - key: FLASK_ENV
+        value: "production"  # 本番環境を指定 
