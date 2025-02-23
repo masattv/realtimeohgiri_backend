@@ -17,7 +17,7 @@ CORS(app, resources={
         "origins": [
             "http://localhost:3000",     # ローカル開発用
             "http://localhost:5173",     # Vite開発サーバー用
-            "https://realtimeohgiri-backend.onrender.com",  # 本番環境用（必要に応じて変更）
+            "https://realtimeohgiri.netlify.app/",  # 本番環境用（必要に応じて変更）
         ],
         "methods": [
             "GET", 
@@ -38,7 +38,7 @@ CORS(app, resources={
 socketio = SocketIO(app, cors_allowed_origins=[
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://realtimeohgiri-backend.onrender.com"
+    "https://realtimeohgiri.netlify.app/"
 ])
 
 # SQLiteを利用したDB設定
@@ -206,21 +206,24 @@ def add_topic():
         return jsonify({'error': 'Failed to add topic'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # ポート番号を5000に変更
-    debug_mode = os.environ.get("FLASK_ENV") == "development"
-    
     # Render環境かどうかを確認
     is_render = os.environ.get("RENDER") == "true"
     
     if is_render:
-        # Renderではgunicornが使用されるため、このブロックは実行されない
-        pass
-    else:
-        # ローカル開発環境での実行
+        # Render環境では環境変数PORTを使用
+        port = int(os.environ.get("PORT", 10000))
         socketio.run(
-            app, 
-            debug=debug_mode,
+            app,
+            host='0.0.0.0',
             port=port,
-            host='0.0.0.0'
+            debug=False  # 本番環境ではデバッグモードをオフ
+        )
+    else:
+        # ローカル開発環境では5000番ポートを使用
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=5000,
+            debug=True
         )
 
